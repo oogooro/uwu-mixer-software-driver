@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "cross-env ENV=\"dev\" ts-node src/index.ts",
     "start": "npm run build && npm run deploy",
@@ -17,13 +17,12 @@
   "author": "oogooro",
   "license": "MIT",
   "devDependencies": {
-    "@types/lodash": "^4.17.15",
     "cross-env": "^7.0.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "lodash": "^4.17.21",
+    "@types/node": "^22.13.5",
     "log4uwu": "^1.1.0",
     "node-audio-volume-mixer": "^1.0.3",
     "serialport": "^13.0.0"
