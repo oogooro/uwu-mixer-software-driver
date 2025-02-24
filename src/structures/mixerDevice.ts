@@ -103,7 +103,6 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     private processSeeker() {
         this.processSeekerTriggered = true;
         const audioProcesses = NodeAudioVolumeMixer.getAudioSessionProcesses();
-        console.log(audioProcesses);
         for (let i = 0; i < this.potMaps.length; i++) {
             if (!this.channels[i]) continue; // channel disabled
             if (this.potMaps[i] === 'master') continue; // channel mapped to master
