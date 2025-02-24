@@ -103,12 +103,14 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     private processSeeker() {
         this.processSeekerTriggered = true;
         const audioProcesses = NodeAudioVolumeMixer.getAudioSessionProcesses();
+        console.log(audioProcesses);
         for (let i = 0; i < this.potMaps.length; i++) {
             if (!this.channels[i]) continue; // channel disabled
             if (this.potMaps[i] === 'master') continue; // channel mapped to master
-            
+
+            this.potsMapPids[i] = [];
             for (const processName of this.potMaps[i]) {
-                this.potsMapPids[i] = audioProcesses.filter(p => p.name.toLowerCase().includes(processName.toLowerCase())).map(p => p.pid);
+                this.potsMapPids[i].push(...audioProcesses.filter(p => p.name.toLowerCase().includes(processName.toLowerCase())).map(p => p.pid));
             }
         }
     }
