@@ -30,7 +30,7 @@ export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
                 const dataSplitted = rawData.split('\n');
                 partialData = dataSplitted.pop() ?? '';
                 for (const data of dataSplitted) this.handleData(data);
-            }
+            } else partialData = rawData;
         });
 
         this.port.on('error', (error) => {
