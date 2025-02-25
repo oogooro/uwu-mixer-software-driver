@@ -35,25 +35,17 @@ export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
 
         this.port.on('error', (error) => {
             this.connected = false;
-
-            this.emit('disconnect');
-
-            logger.error(error);
+            this.emit('error', error);
         });
 
         this.port.on('close', () => {
             this.connected = false;
-
             this.emit('disconnect');
-
-            logger.log({
-                level: 'info',
-                message: `Port ${serialPortPath} closed`,
-                color: 'grey',
-            });
         });
 
-        this.port.open();
+        this.port.open((error) => {
+            if (error) this.emit('error', error);
+        });
     }
 
     private handleData(data: string): void {

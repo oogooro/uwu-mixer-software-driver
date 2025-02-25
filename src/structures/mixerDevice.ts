@@ -19,10 +19,11 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     private potsMapPids: number[][] = [];
     private processSeekerTriggered = false;
     private processSeekerInterval: NodeJS.Timeout;
+    private deviceTimeout: NodeJS.Timeout;
 
     constructor(options: MixerOptions) {
         super();
-        const { serialPort, baudRate, reversePotsPolarity, channels, potMaps } = options;
+        const { serialPort, baudRate, reversePotsPolarity, channels, potMaps, initializationTimeout } = options;
 
         this.isInitialized = false;
 
@@ -34,6 +35,13 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         }
         
         this.potMaps = potMaps ?? [];
+
+        this.deviceTimeout = setTimeout(() => { 
+            if (!this.isInitialized) {
+                this.emit('error', new Error('Failed to initialize device'));
+                this.destory();
+            } 
+        }, initializationTimeout ?? 5 * 1000 /* 5 sec*/);
         
         this.serial = new SerialHandler(serialPort, baudRate);
 
@@ -66,6 +74,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 
                 this.serial.sendConfig(config);
                 this.isInitialized = true;
+                clearTimeout(this.deviceTimeout);
                 this.emit('ready');
             }
         });
@@ -93,14 +102,20 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
             this.potsValues = pots;
         });
 
-        this.serial.once('disconnect', () => {
+        this.serial.once('error', (error) => {
             clearInterval(this.processSeekerInterval);
+            this.emit('error', error);
+            this.destory();
+        });
+
+        this.serial.once('disconnect', () => {
             this.emit('disconnect');
+            this.destory();
             logger.debug(`Device ${serialPort} disconnected`);
         });
     }
 
-    private processSeeker() {
+    private processSeeker(): void {
         this.processSeekerTriggered = true;
         const audioProcesses = NodeAudioVolumeMixer.getAudioSessionProcesses();
         for (let i = 0; i < this.potMaps.length; i++) {
@@ -112,5 +127,12 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 this.potsMapPids[i].push(...audioProcesses.filter(p => p.name.toLowerCase().includes(processName.toLowerCase())).map(p => p.pid));
             }
         }
+    }
+
+    destory() {
+        clearInterval(this.processSeekerInterval);
+        clearTimeout(this.deviceTimeout);
+        this.removeAllListeners();
+        this.serial.removeAllListeners();
     }
 };

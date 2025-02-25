@@ -22,8 +22,8 @@ const createMixer = (port: string, baudRate = 115200): void => {
     mixer.once('connect', () => {
         logger.log({
             level: 'info',
-            message: 'Mixer connected',
-            color: 'green',
+            message: 'Mixer initializing...',
+            color: 'cyanBright',
         });
     });
 
@@ -41,6 +41,11 @@ const createMixer = (port: string, baudRate = 115200): void => {
             message: 'Mixer disconnected',
             color: 'gray',
         });
+    });
+
+    mixer.once('error', (error) => {
+        logger.error(error);
+        process.exit(1);
     });
 };
 
