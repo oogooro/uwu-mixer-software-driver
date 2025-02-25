@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "description": "",
   "main": "dist/index.js",
+  "bin": {
+    "mixer-driver": "dist/index.js"
+  },
   "scripts": {
     "dev": "cross-env ENV=\"dev\" ts-node src/index.ts",
     "start": "npm run build && npm run deploy",
@@ -24,9 +27,9 @@
   "dependencies": {
     "@inquirer/prompts": "^7.3.2",
     "@types/node": "^22.13.5",
+    "commander": "^13.1.0",
     "log4uwu": "^1.1.0",
     "node-audio-volume-mixer": "^1.0.3",
-    "serialport": "^13.0.0",
-    "yargs": "^17.7.2"
+    "serialport": "^13.0.0"
   }
 }

@@ -4,11 +4,26 @@ import logger from './logger';
 import { MixerDevice } from './structures/mixerDevice';
 import { SerialPort } from 'serialport';
 import { select } from '@inquirer/prompts';
+import { Command } from 'commander';
 
-const createMixer = (port: string, baudRate = 115200): void => {
+const program = new Command();
+program
+    .name('uwu-mixer-driver')
+    .description('CLI uwu mixer driver')
+    .option('-p --port <string>', 'Mixer port')
+    .option('-b --baudrate <number>', 'Mixer baudrate. Default 115200')
+    .helpOption('-h', 'Show this');
+
+program.parse();
+
+const options = program.opts();
+const baudRate: number = Number(options.baudrate) || 115200;
+const comPort: string = options.port;
+
+const createMixer = (port: string): void => {
     const mixer = new MixerDevice({
         serialPort: port,
-        baudRate: baudRate,
+        baudRate,
         reversePotsPolarity: true,
         potMaps: [
             'master',
@@ -49,15 +64,18 @@ const createMixer = (port: string, baudRate = 115200): void => {
     });
 };
 
-SerialPort.list().then(ports => {
-    select({
-        message: 'Select mixer port',
-        choices: ports.map((port) => {
-            return {
-                // @ts-expect-error
-                name: port.friendlyName || port.path,
-                value: port.path,
-            };
-        })
-    }).then((mixerPort) => createMixer(mixerPort));
-});
+if (comPort) createMixer(comPort);
+else {
+    SerialPort.list().then(ports => {
+        select({
+            message: 'Select mixer port',
+            choices: ports.map((port) => {
+                return {
+                    // @ts-expect-error
+                    name: port.friendlyName || port.path,
+                    value: port.path,
+                };
+            })
+        }).then((mixerPort) => createMixer(mixerPort));
+    });
+}
