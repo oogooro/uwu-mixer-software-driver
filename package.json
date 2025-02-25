@@ -22,9 +22,11 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "@inquirer/prompts": "^7.3.2",
     "@types/node": "^22.13.5",
     "log4uwu": "^1.1.0",
     "node-audio-volume-mixer": "^1.0.3",
-    "serialport": "^13.0.0"
+    "serialport": "^13.0.0",
+    "yargs": "^17.7.2"
   }
 }
