@@ -20,6 +20,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     private processSeekerTriggered = false;
     private processSeekerInterval: NodeJS.Timeout;
     private deviceTimeout: NodeJS.Timeout;
+    private hardAdjustInterval: NodeJS.Timeout;
 
     constructor(options: MixerOptions) {
         super();
@@ -42,6 +43,14 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 this.destory();
             } 
         }, initializationTimeout ?? 5 * 1000 /* 5 sec*/);
+
+        this.processSeekerInterval = setInterval(() => {
+            if (this.isInitialized) this.processSeeker();
+        }, 500);
+
+        this.hardAdjustInterval = setInterval(() => {
+            if (this.isInitialized) this.adjustVolumeLevels(this.potsValues, true); 
+        }, 1000);
         
         this.serial = new SerialHandler(serialPort, baudRate);
 
@@ -79,27 +88,8 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
             }
         });
 
-        this.processSeekerInterval = setInterval(() => {
-            if (this.isInitialized) this.processSeeker();
-        }, 500);
-
         this.serial.on('potsValues', (...pots) => {
-            if (!this.isInitialized) return;
-            if (!this.processSeekerTriggered) this.processSeeker();
-            for (let i = 0; i < this.potMaps.length; i++) {
-                const potValue = pots[i];
-                if (isNaN(potValue) || potValue === this.potsValues[i]) continue;
-
-                const potMapValue = this.potMaps[i];
-                if (potMapValue === 'master') NodeAudioVolumeMixer.setMasterVolumeLevelScalar(potValue / 100);
-                else {
-                    if (!Array.isArray(this.potsMapPids[i])) continue;
-                    for (const pid of this.potsMapPids[i]) {
-                        NodeAudioVolumeMixer.setAudioSessionVolumeLevelScalar(pid, potValue / 100);
-                    }
-                }
-            }
-            this.potsValues = pots;
+            this.adjustVolumeLevels(pots)
         });
 
         this.serial.once('error', (error) => {
@@ -113,6 +103,28 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
             this.destory();
             logger.debug(`Device ${serialPort} disconnected`);
         });
+    }
+
+    adjustVolumeLevels(pots: number[], force = false): void {
+        if (!this.isInitialized) return;
+        if (!this.processSeekerTriggered) this.processSeeker();
+        logger.debug(`Setting volume: ${pots.join(' ')} (${this.potsMapPids.map(pa => pa.join(' ')).join('|')})`);
+
+        for (let i = 0; i < this.potMaps.length; i++) {
+            const potValue = pots[i];
+            if (isNaN(potValue)) continue;
+            if (!force && potValue === this.potsValues[i]) continue;
+
+            const potMapValue = this.potMaps[i];
+            if (potMapValue === 'master') NodeAudioVolumeMixer.setMasterVolumeLevelScalar(potValue / 100);
+            else {
+                if (!Array.isArray(this.potsMapPids[i])) continue;
+                for (const pid of this.potsMapPids[i]) {
+                    NodeAudioVolumeMixer.setAudioSessionVolumeLevelScalar(pid, potValue / 100);
+                }
+            }
+        }
+        this.potsValues = pots;
     }
 
     private processSeeker(): void {
@@ -129,9 +141,12 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         }
     }
 
-    destory() {
+    destory(): void {
         clearInterval(this.processSeekerInterval);
         clearTimeout(this.deviceTimeout);
+        clearInterval(this.hardAdjustInterval);
+        this.serial.port.removeAllListeners();
+        this.serial.port.end();
         this.removeAllListeners();
         this.serial.removeAllListeners();
     }
