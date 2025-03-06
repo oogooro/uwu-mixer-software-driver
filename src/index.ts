@@ -5,6 +5,15 @@ import { MixerDevice } from './structures/mixerDevice';
 import { SerialPort } from 'serialport';
 import { select } from '@inquirer/prompts';
 import { Command } from 'commander';
+import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { CLIOptions } from './types/CLIOptions';
+import { defaultConfig } from './defaultConfig';
+import { MixerOptions } from './types/mixerDevice';
+import { MixerConfig } from './types/mixerConfig';
+
+const defaultConfigPath = join(__dirname, '../config.json');
+logger.debug(`Default config path: ${defaultConfigPath}`);
 
 const program = new Command();
 program
@@ -16,23 +25,17 @@ program
 
 program.parse();
 
-const options = program.opts();
-const baudRate: number = Number(options.baudrate) || 115200;
-const comPort: string = options.port;
+const options = program.opts<CLIOptions>();
+const baudRate = Number(options.baudrate) || 115200;
+const comPort = options.port;
+const configPath = defaultConfigPath;
 
-const createMixer = (port: string): void => {
-    const mixer = new MixerDevice({
-        serialPort: port,
-        baudRate,
-        reversePotsPolarity: true,
-        potMaps: [
-            'master',
-            ['spotify'],
-            ['firefox'],
-            ['speed', 'cs2', 'factorio'], // games
-            ['discord'],
-        ],
-    });
+const getConfig = (path: string): MixerConfig => {
+    return JSON.parse(readFileSync(path, { encoding: 'utf8', }));
+};
+
+const createMixer = (options: MixerOptions): void => {
+    const mixer = new MixerDevice(options);
 
     mixer.once('connect', () => {
         logger.log({
@@ -64,7 +67,13 @@ const createMixer = (port: string): void => {
     });
 };
 
-if (comPort) createMixer(comPort);
+if (!existsSync(configPath)) writeFileSync(configPath, JSON.stringify(defaultConfig, null, 4));
+
+const config = getConfig(configPath);
+const potMaps = config.potMaps;
+const reversePotsPolarity = config.reversePolarity;
+
+if (comPort) createMixer({ serialPort: comPort, baudRate, potMaps, reversePotsPolarity, });
 else {
     SerialPort.list().then(ports => {
         select({
@@ -76,6 +85,6 @@ else {
                     value: port.path,
                 };
             })
-        }).then((mixerPort) => createMixer(mixerPort));
+        }).then((mixerPort) => createMixer({ serialPort: mixerPort, baudRate, potMaps, reversePotsPolarity, }));
     });
 }
