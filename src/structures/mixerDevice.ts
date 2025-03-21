@@ -2,9 +2,9 @@ import { NodeAudioVolumeMixer } from 'node-audio-volume-mixer';
 import { Command } from '../types/commandTypes';
 import { MixerEvents, MixerOptions, PotMapValue } from '../types/mixerDevice';
 import { SerialHandler } from './serialHandler';
-import { Feature, MixerFeaturesFlags } from '../types/feature';
 import logger from '../logger';
 import EventEmitter from 'node:events';
+import { Feature } from './features/feature';
 
 export class MixerDevice extends EventEmitter<MixerEvents> {
     isInitialized: boolean = false;
@@ -63,25 +63,26 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
             const command = commandData.shift() as Command;
 
             if (command === 'r') {
-                const [protocolVersion, numOfHardwareChannels, features] = commandData.map(Number);
-
+                const [protocolVersion] = commandData.map(Number);
+                
                 this.protocolVersion = protocolVersion;
+                
+                if (protocolVersion === 1) {
+                    const [_, numOfHardwareChannels] = commandData.map(Number);
 
-                if (!this.channelsOverrided) this.channels = Array(numOfHardwareChannels).fill(true);
-
-                let featureFlag: Feature;
-                for (featureFlag in MixerFeaturesFlags) {
-                    const flag = MixerFeaturesFlags[featureFlag];
-                    if ((features & flag) !== 0) this.features.push(featureFlag);
+                    if (!this.channelsOverrided) this.channels = Array(numOfHardwareChannels).fill(true);
+                    
+                    let config = '';
+                    for (let i = 0; i < this.channels.length; i++) if (this.channels[i]) config += i;
+                    if (this.reversePotsPolarity) config += 'r';
+                    
+                    this.serial.sendConfig(config);
+                } else {
+                    this.emit('error', new Error('Protocol version not supported'));
+                    this.destory();
+                    return;
                 }
 
-                // TODO: query for features data
-                
-                let config = '';
-                for (let i = 0; i < this.channels.length; i++) if (this.channels[i]) config += i;
-                if (this.reversePotsPolarity) config += 'r';
-                
-                this.serial.sendConfig(config);
                 this.isInitialized = true;
                 clearTimeout(this.deviceTimeout);
                 this.emit('ready');
@@ -93,7 +94,6 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         });
 
         this.serial.once('error', (error) => {
-            clearInterval(this.processSeekerInterval);
             this.emit('error', error);
             this.destory();
         });

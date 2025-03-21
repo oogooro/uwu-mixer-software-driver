@@ -1,5 +1,7 @@
-export type DataType = '$' // Hardware -> Driver command
+export type DataType = '#' // Command
     | '=' // Pots values
-    | '*' // Query response
+    | '?' // Query request
+    | '!' // Query response
+    | '^' // Custom communication / Feature
     ;
 export type Command = 'r';

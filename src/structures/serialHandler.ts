@@ -5,6 +5,8 @@ import logger from '../logger';
 import { DataType } from '../types/commandTypes';
 
 export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
+    private queryCollector: (value: string[] | PromiseLike<string[]>) => void;
+    private queryCollectorAttached = false;
     connected = false;
     port: SerialPort;
     constructor(serialPortPath: string, baudRate = 115200) {
@@ -49,18 +51,26 @@ export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
     }
 
     private handleData(data: string): void {
-        const dataType = data.charAt(0) as DataType;
-        const args = data.slice(1).split(':');
+        const dataSplitted = data.split(':');
+        const dataType = dataSplitted.shift() as DataType;
 
-        logger.debug(`Command: ${dataType}`);
-        logger.debug(`Args: ${args.join(' ')}`);
+        logger.debug(`Data ${dataType} -> ${dataSplitted.join(' ')}`);
 
-        if (dataType === '$') {
-            this.emit('command', ...args);
+        if (dataType === '#') {
+            this.emit('command', ...dataSplitted);
         } else if (dataType === '=') {
-            this.emit('potsValues', ...args.map(Number));
-        } else if (dataType === '*') {
-            this.emit('queryResponse', ...args);
+            this.emit('potsValues', ...dataSplitted.map(Number));
+        } else if (dataType === '!') {
+            if (!this.queryCollectorAttached) {
+                logger.log({
+                    level: 'warn',
+                    message: 'Recieved unexpected query response',
+                    color: 'yellowBright',
+                });
+            } else {
+                this.queryCollectorAttached = false;
+                this.queryCollector(dataSplitted);
+            }
         } else {
             logger.log({
                 level: 'warn',
@@ -73,5 +83,11 @@ export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
     sendConfig(data: string): void {
         logger.debug(`Sending config: ${data}`);
         this.port.write(`#${data}#`);
+    }
+
+    async query(queryData: string): Promise<string[]> {
+        this.queryCollectorAttached = true;
+        this.port.write(`?:${queryData}\n`);
+        return new Promise((resolve) => {this.queryCollector = resolve});
     }
 };

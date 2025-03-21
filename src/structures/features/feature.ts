@@ -1,4 +1,4 @@
-import { Feature as FeatureId } from '../../types/feature'
+import { FeatureId } from '../../types/feature'
 import { MixerDevice } from '../mixerDevice';
 
 export class Feature {
