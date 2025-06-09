@@ -1,1 +1,0 @@
-export type FeatureId = 'LED' | 'MUTE_PUSH_BUTTONS' | 'DISPLAY';

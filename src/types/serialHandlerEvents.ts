@@ -3,6 +3,6 @@ export interface SerialHandlerEvents {
     error: Error[];
     disconnect: never[];
     potsValues: number[];
-    command: string[];
-    queryResponse: string[];
+    data: string[];
+    debug: string[];
 }

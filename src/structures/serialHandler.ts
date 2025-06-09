@@ -2,11 +2,9 @@ import { SerialPort } from 'serialport';
 import { EventEmitter } from 'node:events';
 import { SerialHandlerEvents } from '../types/serialHandlerEvents';
 import logger from '../logger';
-import { DataType } from '../types/commandTypes';
+import { IncomingCommand, OutgoingCommand } from '../types/commands';
 
 export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
-    private queryCollector: (value: string[] | PromiseLike<string[]>) => void;
-    private queryCollectorAttached = false;
     connected = false;
     port: SerialPort;
     constructor(serialPortPath: string, baudRate = 115200) {
@@ -26,7 +24,7 @@ export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
         let partialData = '';
         this.port.on('data', (rawDataBuffer: Buffer) => {
             const rawData = partialData + rawDataBuffer.toString();
-            logger.debug(`Data: ${rawData}`);
+            // logger.debug(`Data: ${rawData}`);
 
             if (rawData.includes('\n')) { // we got at least one whole data packet
                 const dataSplitted = rawData.split('\n');
@@ -50,44 +48,21 @@ export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
         });
     }
 
+    sendCommand(command: OutgoingCommand, ...args: (string | number)[]): void {
+        logger.debug(`Sending command ${command} -> ${args.join(' ')}`);
+        this.port.write(`${command}${args?.length ? (args.map(a => typeof a === 'string' ? Buffer.from(a).toString('base64') : a).join(':')) : ''}\n`);
+    }
+
     private handleData(data: string): void {
-        const dataSplitted = data.split(':');
-        const dataType = dataSplitted.shift() as DataType;
+        const dataSplitted = data.slice(1).split(':');
+        const command = data.charAt(0) as IncomingCommand;
 
-        logger.debug(`Data ${dataType} -> ${dataSplitted.join(' ')}`);
+        logger.debug(`Data ${command} -> ${dataSplitted.join(' ')}`);
 
-        if (dataType === '#') {
-            this.emit('command', ...dataSplitted);
-        } else if (dataType === '=') {
+        if (command === '=') {
             this.emit('potsValues', ...dataSplitted.map(Number));
-        } else if (dataType === '!') {
-            if (!this.queryCollectorAttached) {
-                logger.log({
-                    level: 'warn',
-                    message: 'Recieved unexpected query response',
-                    color: 'yellowBright',
-                });
-            } else {
-                this.queryCollectorAttached = false;
-                this.queryCollector(dataSplitted);
-            }
         } else {
-            logger.log({
-                level: 'warn',
-                message: 'Unknown data type',
-                color: 'yellowBright',
-            });
+            this.emit('data', ...[command, ...dataSplitted]);
         }
-    }
-
-    sendConfig(data: string): void {
-        logger.debug(`Sending config: ${data}`);
-        this.port.write(`#${data}#`);
-    }
-
-    async query(queryData: string): Promise<string[]> {
-        this.queryCollectorAttached = true;
-        this.port.write(`?:${queryData}\n`);
-        return new Promise((resolve) => {this.queryCollector = resolve});
     }
 };

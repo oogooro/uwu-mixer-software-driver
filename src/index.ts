@@ -65,15 +65,34 @@ const createMixer = (options: MixerOptions): void => {
         logger.error(error);
         process.exit(1);
     });
+
+    mixer.on('warning', (...w) => {
+        for (const warning of w) {
+            logger.log({
+                level: 'warn',
+                message: warning,
+                color: 'yellowBright',
+            });
+        }
+    });
+
+    mixer.on('message', (...msg) => {
+        for (const message of msg) {
+            logger.log({
+                level: 'info',
+                message: message,
+                color: 'magentaBright'
+            });
+        }
+    });
 };
 
 if (!existsSync(configPath)) writeFileSync(configPath, JSON.stringify(defaultConfig, null, 4));
 
 const config = getConfig(configPath);
-const potMaps = config.potMaps;
-const reversePotsPolarity = config.reversePolarity;
+const channelConfig = config.channels;
 
-if (comPort) createMixer({ serialPort: comPort, baudRate, potMaps, reversePotsPolarity, });
+if (comPort) createMixer({ serialPort: comPort, baudRate, channelConfig, });
 else {
     SerialPort.list().then(ports => {
         select({
@@ -85,6 +104,6 @@ else {
                     value: port.path,
                 };
             })
-        }).then((mixerPort) => createMixer({ serialPort: mixerPort, baudRate, potMaps, reversePotsPolarity, }));
+        }).then((mixerPort) => createMixer({ serialPort: mixerPort, baudRate, channelConfig, }));
     });
 }

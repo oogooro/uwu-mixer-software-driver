@@ -1,17 +1,19 @@
+import { ChannelConfig } from './mixerConfig';
+
 export type MixerOptions = {
     serialPort: string;
     baudRate: number;
-    channels?: boolean[];
-    potMaps?: PotMapValue[];
-    reversePotsPolarity?: boolean;
+    channelConfig: ChannelConfig[];
     initializationTimeout?: number;
 };
 
-export type PotMapValue = 'master' | string[];
+export type ChannelBindValue = 'master' | 'mic' | string[];
 
 export interface MixerEvents {
     connect: never[];
     ready: never[];
     disconnect: never[];
     error: Error[];
+    warning: string[];
+    message: string[];
 }

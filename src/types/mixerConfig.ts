@@ -1,6 +1,13 @@
-import { PotMapValue } from './mixerDevice';
+import { ChannelBindValue } from './mixerDevice';
+
+export type ChannelConfig = {
+    bindedApps: ChannelBindValue;
+    reversePolarity?: boolean;
+    logharitmic?: boolean;
+    muteButton?: boolean;
+    ledIndicator?: boolean;
+};
 
 export interface MixerConfig {
-    reversePolarity: boolean;
-    potMaps: PotMapValue[];
+    channels: ChannelConfig[];
 };

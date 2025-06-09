@@ -8,7 +8,7 @@
     "mixer-driver": "dist/index.js"
   },
   "scripts": {
-    "dev": "cross-env ENV=\"dev\" ts-node src/index.ts",
+    "dev": "cross-env ENV=\"dev\" tsx src/index.ts",
     "start": "npm run build && npm run deploy",
     "deploy": "cross-env ENV=\"prod\" node --trace-warnings --disable-warning=ExperimentalWarning dist/index.js",
     "deploydev": "cross-env ENV=\"dev\" node --trace-warnings --disable-warning=ExperimentalWarning dist/index.js",
@@ -21,7 +21,6 @@
   "license": "MIT",
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
@@ -30,6 +29,7 @@
     "commander": "^13.1.0",
     "log4uwu": "^1.1.0",
     "node-audio-volume-mixer": "^1.0.3",
-    "serialport": "^13.0.0"
+    "serialport": "^13.0.0",
+    "tsx": "^4.19.4"
   }
 }
