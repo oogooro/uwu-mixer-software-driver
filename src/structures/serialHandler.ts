@@ -2,7 +2,7 @@ import { SerialPort } from 'serialport';
 import { EventEmitter } from 'node:events';
 import { SerialHandlerEvents } from '../types/serialHandlerEvents';
 import logger from '../logger';
-import { DataType } from '../types/commandTypes';
+import { IncomingCommand, OutgoingCommand } from '../types/commands';
 
 export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
     connected = false;
@@ -24,7 +24,7 @@ export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
         let partialData = '';
         this.port.on('data', (rawDataBuffer: Buffer) => {
             const rawData = partialData + rawDataBuffer.toString();
-            logger.debug(`Data: ${rawData}`);
+            // logger.debug(`Data: ${rawData}`);
 
             if (rawData.includes('\n')) { // we got at least one whole data packet
                 const dataSplitted = rawData.split('\n');
@@ -48,30 +48,21 @@ export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
         });
     }
 
-    private handleData(data: string): void {
-        const dataType = data.charAt(0) as DataType;
-        const args = data.slice(1).split(':');
-
-        logger.debug(`Command: ${dataType}`);
-        logger.debug(`Args: ${args.join(' ')}`);
-
-        if (dataType === '$') {
-            this.emit('command', ...args);
-        } else if (dataType === '=') {
-            this.emit('potsValues', ...args.map(Number));
-        } else if (dataType === '*') {
-            this.emit('queryResponse', ...args);
-        } else {
-            logger.log({
-                level: 'warn',
-                message: 'Unknown data type',
-                color: 'yellowBright',
-            });
-        }
+    sendCommand(command: OutgoingCommand, ...args: (string | number)[]): void {
+        logger.debug(`Sending command ${command} -> ${args.join(' ')}`);
+        this.port.write(`${command}${args?.length ? (args.map(a => typeof a === 'string' ? Buffer.from(a).toString('base64') : a).join(':')) : ''}\n`);
     }
 
-    sendConfig(data: string): void {
-        logger.debug(`Sending config: ${data}`);
-        this.port.write(`#${data}#`);
+    private handleData(data: string): void {
+        const dataSplitted = data.slice(1).split(':');
+        const command = data.charAt(0) as IncomingCommand;
+
+        logger.debug(`Data ${command} -> ${dataSplitted.join(' ')}`);
+
+        if (command === '=') {
+            this.emit('potsValues', ...dataSplitted.map(Number));
+        } else {
+            this.emit('data', ...[command, ...dataSplitted]);
+        }
     }
 };
