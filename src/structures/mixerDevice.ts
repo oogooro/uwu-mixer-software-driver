@@ -21,6 +21,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     private processSeekerInterval: NodeJS.Timeout;
     private deviceTimeout: NodeJS.Timeout;
     private hardAdjustInterval: NodeJS.Timeout;
+    private oledActiveTimeout: NodeJS.Timeout;
 
     constructor(options: MixerOptions) {
         super();
@@ -110,6 +111,9 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                         else for (const pid of this.channelBindPids[i]) NodeAudioVolumeMixer.setAudioSessionMute(pid, muting);
 
                         logger.debug(muting ? `Muted channel ${i}` : `Unmuted channel ${i}`);
+
+                        this.setOledActive();
+                        this.serial.sendCommand('o', 3, muting ? 0 : 1, i);
                     }
                 }
 
@@ -126,8 +130,22 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
             }
         });
 
-        this.serial.on('potsValues', (...pots) => {
-            this.adjustVolumeLevels(pots)
+        this.serial.on('potsValues', (...chValues) => {
+            if (this.channelValues.length) {
+                let changedValue: number;
+                
+                for (let i = 0; i < this.handledChannels; i++) {
+                    if (chValues[i] !== this.channelValues[i]) {
+                        changedValue = chValues[i];
+                        break;
+                    }
+                }
+
+                this.setOledActive();
+                this.serial.sendCommand('o', 0, changedValue);
+            }
+
+            this.adjustVolumeLevels(chValues);
         });
 
         this.serial.once('error', (error) => {
@@ -194,6 +212,16 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 }
             }
         }
+    }
+
+    private setOledActive() {
+        if (this.oledActiveTimeout) {
+            clearTimeout(this.oledActiveTimeout);
+        }
+
+        this.oledActiveTimeout = setTimeout(() => {
+            this.serial.sendCommand('o', 1);
+        }, 1500);
     }
 
     destory(): void {
