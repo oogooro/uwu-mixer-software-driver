@@ -7,4 +7,5 @@ export type OutgoingCommand =
     'i' | // initalize mixer
     'l' | // set leds
     'r' | // read channel values
-    'c';  // config
+    'c' | // config
+    'o';
