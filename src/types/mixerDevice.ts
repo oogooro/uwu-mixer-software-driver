@@ -7,8 +7,6 @@ export type MixerOptions = {
     initializationTimeout?: number;
 };
 
-export type ChannelBindValue = 'master' | 'mic' | string[];
-
 export interface MixerEvents {
     connect: never[];
     ready: never[];

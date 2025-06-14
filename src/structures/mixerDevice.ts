@@ -1,4 +1,4 @@
-import { NodeAudioVolumeMixer } from 'node-audio-volume-mixer';
+import nativeMixer, { AudioSession, Device, DeviceType } from 'native-sound-mixer';
 import { IncomingCommand } from '../types/commands';
 import { MixerEvents, MixerOptions } from '../types/mixerDevice';
 import { SerialHandler } from './serialHandler';
@@ -16,8 +16,6 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     handledChannels: number;
     hardwareVersion: number;
     hardwareChannels: number;
-    private channelBindPids: number[][] = [];
-    private processSeekerTriggered = false;
     private processSeekerInterval: NodeJS.Timeout;
     private deviceTimeout: NodeJS.Timeout;
     private hardAdjustInterval: NodeJS.Timeout;
@@ -25,6 +23,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
 
     constructor(options: MixerOptions) {
         super();
+
         const { serialPort, baudRate, channelConfig, initializationTimeout } = options;
 
         this.isInitialized = false;
@@ -36,10 +35,6 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 this.destory();
             } 
         }, initializationTimeout ?? 5 * 1000 /* 5 sec*/);
-
-        this.processSeekerInterval = setInterval(() => {
-            if (this.isInitialized) this.processSeeker();
-        }, 200);
 
         this.hardAdjustInterval = setInterval(() => {
             if (this.isInitialized) this.adjustVolumeLevels(this.channelValues, true); 
@@ -68,14 +63,11 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 this.hardwareVersion = hwVer;
                 this.hardwareChannels = hwChannels;
                 this.handledChannels = Math.min(this.channels.length, this.hardwareChannels);
-                this.channelsMuted = Array(this.handledChannels).fill(false);
-                this.channelBindPids = new Array(this.handledChannels).fill([]);
+                this.channelsMuted = new Array(this.handledChannels).fill(false);
 
                 if (hwChannels != this.channels.length) {
                     this.emit('warning', `Number of channels does not match config. Hardware channels ${hwChannels} - configured ${this.channels.length}`);
                 }
-
-                this.processSeeker();
 
                 const reversedPolarityChannels: number[] = [];
                 const logharitmicChannels: number[] = [];
@@ -83,8 +75,15 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 for (let i = 0; i < this.handledChannels; i++) {
                     const channel = this.channels[i];
 
-                    if (channel.reversePolarity) reversedPolarityChannels.push(i);
+                    if (channel.polarityReversed) reversedPolarityChannels.push(i);
                     if (channel.logharitmic) logharitmicChannels.push(i);
+
+                    if ((channel.type === 'render' && !channel.processes) || channel.type === 'capture') {
+                        this.getDevice(channel.device, channel.type).on('mute', (muted: boolean) => {
+                            this.channelsMuted[i] = muted;
+                            this.serial.sendCommand('l', ...this.channelsMuted.map(v => v ? 255 : 0));
+                        });
+                    }
                 }
 
                 if (reversedPolarityChannels.length) {
@@ -102,13 +101,19 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 this.emit('ready');
             } else if (command === 'b') {
                 const buttons = Number(commandData.shift());
-                for (let i = 0; i < this.handledChannels; i++) {
+                for (let i = 0; i < this.handledChannels; i++) { // TODO: rework because funky
                     if (!!(buttons & (1 << i))) {
                         const muting = !this.channelsMuted[i]
                         this.channelsMuted[i] = muting;
-                        if (channelConfig[i].bindedApps === 'master') NodeAudioVolumeMixer.muteMaster(muting);
-                        else if (channelConfig[i].bindedApps === 'mic') {} // TODO: handle MIC 
-                        else for (const pid of this.channelBindPids[i]) NodeAudioVolumeMixer.setAudioSessionMute(pid, muting);
+
+                        const channel = channelConfig[i];
+                        const device = this.getDevice(channel.device, channel.type);
+                        
+                        if (channel.type === 'render' && channel.processes) { // processes
+                            device.sessions.filter(this.getSessionFilter(i)).forEach(as => { as.mute = muting; });
+                        } else { // device master mute
+                            device.mute = muting;
+                        }
 
                         logger.debug(muting ? `Muted channel ${i}` : `Unmuted channel ${i}`);
 
@@ -131,6 +136,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         });
 
         this.serial.on('potsValues', (...chValues) => {
+            chValues = chValues.map(v => v / 100);
             if (this.channelValues.length) {
                 let changedValue: number;
                 
@@ -142,7 +148,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 }
 
                 this.setOledActive();
-                this.serial.sendCommand('o', 0, changedValue);
+                this.serial.sendCommand('o', 0, Math.round(changedValue * 100));
             }
 
             this.adjustVolumeLevels(chValues);
@@ -162,74 +168,51 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
 
     adjustVolumeLevels(channels: number[], force = false): void {
         if (!this.isInitialized) return;
-        if (!this.processSeekerTriggered) this.processSeeker();
-        logger.debug(`Setting volume: ${channels.join(' ')} (${this.channelBindPids.map(pa => pa.join(' ')).join('|')})`);
+        logger.debug(`Setting volume: ${channels.join(' ')}`);
 
         for (let i = 0; i < this.handledChannels; i++) {
             const channelValue = channels[i];
             if (isNaN(channelValue)) continue;
             if (!force && channelValue === this.channelValues[i]) continue;
-
-            const channelBind = this.channels[i].bindedApps;
-            if (channelBind === 'master') NodeAudioVolumeMixer.setMasterVolumeLevelScalar(channelValue / 100);
-            else if (channelBind === 'mic') {} // TODO: MIC CHANNEL BIND
-            else {
-                if (!Array.isArray(this.channelBindPids[i])) continue;
-                for (const pid of this.channelBindPids[i]) {
-                    NodeAudioVolumeMixer.setAudioSessionVolumeLevelScalar(pid, channelValue / 100);
-                }
+            
+            const channel = this.channels[i];
+            const device = this.getDevice(channel.device, channel.type);
+            if (channel.type === 'render' && channel.processes) { // processes
+                device.sessions.filter(this.getSessionFilter(i)).forEach(as => { as.volume = channelValue; });
+            } else { // device master volume
+                device.volume = channelValue;
             }
         }
         this.channelValues = channels;
     }
 
-    private processSeeker(): void {
-        this.processSeekerTriggered = true;
-        const audioProcesses = NodeAudioVolumeMixer.getAudioSessionProcesses();
-        for (let i = 0; i < this.handledChannels; i++) {
-            const channel = this.channels[i];
-
-            if (channel.bindedApps === 'master') {
-                if (NodeAudioVolumeMixer.isMasterMuted() && !this.channelsMuted[i]) {
-                    this.channelsMuted[i] = true;
-                    this.serial.sendCommand('l', ...this.channelsMuted.map(v => v ? 255 : 0));
-                } else if (!NodeAudioVolumeMixer.isMasterMuted() && this.channelsMuted[i]) {
-                    this.channelsMuted[i] = false;
-                    this.serial.sendCommand('l', ...this.channelsMuted.map(v => v ? 255 : 0));
-                }
-                continue;
-            } else if (channel.bindedApps === 'mic') {
-                continue;
-            }
-
-            this.channelBindPids[i] = [];
-            for (const processName of channel.bindedApps) {
-                this.channelBindPids[i].push(...audioProcesses.filter(p => p.name.toLowerCase().includes(processName.toLowerCase())).map(p => p.pid));
-                
-                for (const pid of this.channelBindPids[i]) {
-                    if (this.channelsMuted[i] && !NodeAudioVolumeMixer.isAudioSessionMuted(pid)) NodeAudioVolumeMixer.setAudioSessionMute(pid, true);
-                    else if (!this.channelsMuted[i] && NodeAudioVolumeMixer.isAudioSessionMuted(pid)) NodeAudioVolumeMixer.setAudioSessionMute(pid, false);
-                }
-            }
-        }
-    }
-
-    private setOledActive() {
+    private setOledActive(): void {
         if (this.oledActiveTimeout) {
             clearTimeout(this.oledActiveTimeout);
         }
 
         this.oledActiveTimeout = setTimeout(() => {
             this.serial.sendCommand('o', 1);
-        }, 1500);
+        }, 2000);
+    }
+
+    private getSessionFilter(channelNum: number): (s: AudioSession) => boolean {
+        const channel = this.channels[channelNum];
+        if (channel.type === 'render') {
+            return s => channel.processes.some(p => s.appName.replaceAll('\\', '/').split('/').at(-1).toLowerCase().includes(p.toLowerCase()));
+        } else throw new Error('Channel type is not render');
+    }
+
+    private getDevice(deviceName: string, type: ('render' | 'capture')): Device {
+        return nativeMixer.devices.find(d => d.name === deviceName) ?? nativeMixer.getDefaultDevice(type === 'render' ? DeviceType.RENDER : DeviceType.CAPTURE);
     }
 
     destory(): void {
         clearInterval(this.processSeekerInterval);
         clearTimeout(this.deviceTimeout);
         clearInterval(this.hardAdjustInterval);
+        this.serial.port.close();
         this.serial.port.removeAllListeners();
-        this.serial.port.end();
         this.removeAllListeners();
         this.serial.removeAllListeners();
     }
