@@ -79,7 +79,10 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                     if (channel.logharitmic) logharitmicChannels.push(i);
 
                     if ((channel.type === 'render' && !channel.processes) || channel.type === 'capture') {
-                        this.getDevice(channel.device, channel.type).on('mute', (muted: boolean) => {
+                        const dev = this.getDevice(channel.device, channel.type);
+                        this.channelsMuted[i] = dev.mute;
+
+                        dev.on('mute', (muted: boolean) => {
                             this.channelsMuted[i] = muted;
                             this.serial.sendCommand('l', ...this.channelsMuted.map(v => v ? 255 : 0));
                         });
@@ -93,6 +96,8 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 if (logharitmicChannels.length) {
                     this.serial.sendCommand('c', 1, ...logharitmicChannels);
                 }
+
+                this.serial.sendCommand('l', ...this.channelsMuted.map(v => v ? 255 : 0));
 
                 this.serial.sendCommand('i');
 
