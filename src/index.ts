@@ -59,6 +59,8 @@ const createMixer = (options: MixerOptions): void => {
             message: 'Mixer disconnected',
             color: 'gray',
         });
+
+        process.exit(0);
     });
 
     mixer.once('error', (error) => {

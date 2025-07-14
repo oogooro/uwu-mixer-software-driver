@@ -20,6 +20,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     private deviceTimeout: NodeJS.Timeout;
     private hardAdjustInterval: NodeJS.Timeout;
     private oledActiveTimeout: NodeJS.Timeout;
+    private buttonsPressed: number[] = [];
 
     constructor(options: MixerOptions) {
         super();
@@ -216,7 +217,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         clearInterval(this.processSeekerInterval);
         clearTimeout(this.deviceTimeout);
         clearInterval(this.hardAdjustInterval);
-        this.serial.port.close();
+        if (this.serial.port.isOpen) this.serial.port.close();
         this.serial.port.removeAllListeners();
         this.removeAllListeners();
         this.serial.removeAllListeners();
