@@ -155,8 +155,10 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                     }
                 }
 
-                this.setOledActive();
-                this.serial.sendCommand('o', 0, Math.round(changedValue * 100));
+                if (!isNaN(changedValue)) {
+                    this.setOledActive();
+                    this.serial.sendCommand('o', 0, Math.round(changedValue * 100));
+                }
             }
 
             this.adjustVolumeLevels(chValues);
