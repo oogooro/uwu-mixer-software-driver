@@ -20,7 +20,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     private deviceTimeout: NodeJS.Timeout;
     private hardAdjustInterval: NodeJS.Timeout;
     private oledActiveTimeout: NodeJS.Timeout;
-    private buttonsPressed: number[] = [];
+    private buttonsPressed = 0;
 
     constructor(options: MixerOptions) {
         super();
@@ -107,8 +107,8 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 this.emit('ready');
             } else if (command === 'b') {
                 const buttons = Number(commandData.shift());
-                for (let i = 0; i < this.handledChannels; i++) { // TODO: rework because funky
-                    if (!!(buttons & (1 << i))) {
+                for (let i = 0; i < this.handledChannels; i++) {
+                    if (!!(buttons & (1 << i)) && !(this.buttonsPressed & (1 << i))) {
                         const muting = !this.channelsMuted[i]
                         this.channelsMuted[i] = muting;
 
@@ -127,6 +127,8 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                         this.serial.sendCommand('o', 3, muting ? 0 : 1, i);
                     }
                 }
+
+                this.buttonsPressed = buttons;
 
                 this.serial.sendCommand('l', ...this.channelsMuted.map(v => v ? 255 : 0));
             } else if (command === '#') {
