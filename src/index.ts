@@ -92,9 +92,8 @@ const createMixer = (options: MixerOptions): void => {
 if (!existsSync(configPath)) writeFileSync(configPath, JSON.stringify(defaultConfig, null, 4));
 
 const config = getConfig(configPath);
-const channelConfig = config.channels;
 
-if (comPort) createMixer({ serialPort: comPort, baudRate, channelConfig, });
+if (comPort) createMixer({ serialPort: comPort, baudRate, config, });
 else {
     SerialPort.list().then(ports => {
         select({
@@ -106,6 +105,6 @@ else {
                     value: port.path,
                 };
             })
-        }).then((mixerPort) => createMixer({ serialPort: mixerPort, baudRate, channelConfig, }));
+        }).then((mixerPort) => createMixer({ serialPort: mixerPort, baudRate, config, }));
     });
 }

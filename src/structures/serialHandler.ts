@@ -2,7 +2,7 @@ import { SerialPort } from 'serialport';
 import { EventEmitter } from 'node:events';
 import { SerialHandlerEvents } from '../types/serialHandlerEvents';
 import logger from '../logger';
-import { IncomingCommand, OutgoingCommand } from '../types/commands';
+import { IncomingCommand, ISerialCommandOutgoingOpcodes, OutgoingCommand } from '../types/commands';
 
 export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
     connected = false;
@@ -65,4 +65,52 @@ export class SerialHandler extends EventEmitter<SerialHandlerEvents> {
             this.emit('data', ...[command, ...dataSplitted]);
         }
     }
+};
+
+export const SerialCommandArgs = {
+    oled: {
+        volume: 0,
+        clear: 1,
+        brightness: 2,
+        mute: 3,
+    },
+    leds: {
+        set: 0,
+        brightness: 1,
+    },
+    config: {
+        reversedPolarityChannels: 0,
+    },
+};
+
+export const SerialCommandOutgoingOpcodes: ISerialCommandOutgoingOpcodes = {
+    init: 'i',
+    oled: 'o',
+    leds: 'l',
+    forceRead: 'r',
+    config: 'c',
+};
+
+export const SerialCommand = {
+    oledVolume: (volume: number): (string | number)[] => {
+        return [SerialCommandArgs.oled.volume, volume];
+    },
+    oledClear: (): (string | number)[] => {
+        return [SerialCommandArgs.oled.clear];
+    },
+    oledBrightness: (brightness: number): (string | number)[] => {
+        return [SerialCommandArgs.oled.brightness, brightness];
+    },
+    oledMute: (channel: number, unmute: boolean): (string | number)[] => {
+        return [SerialCommandArgs.oled.mute, unmute ? 1 : 0, channel];
+    },
+    ledsSet: (...leds: boolean[]): (string | number)[] => {
+        return [SerialCommandArgs.leds.set, ...leds.map(b => b ? 1 : 0)];
+    },
+    ledsBrightness: (brightness: number): (string | number)[] => {
+        return [SerialCommandArgs.leds.brightness, brightness];
+    },
+    configReversedPolarityChannels: (...channels: number[]): (string | number)[] => {
+        return [SerialCommandArgs.config.reversedPolarityChannels, ...channels];
+    },
 };

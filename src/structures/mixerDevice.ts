@@ -1,10 +1,11 @@
 import nativeMixer, { AudioSession, Device, DeviceType } from 'native-sound-mixer';
 import { IncomingCommand } from '../types/commands';
 import { MixerEvents, MixerOptions } from '../types/mixerDevice';
-import { SerialHandler } from './serialHandler';
+import { SerialCommand, SerialCommandOutgoingOpcodes, SerialHandler } from './serialHandler';
 import logger from '../logger';
 import EventEmitter from 'node:events';
 import { ChannelConfig } from '../types/mixerConfig';
+import { Oled } from './oled';
 
 export class MixerDevice extends EventEmitter<MixerEvents> {
     isInitialized: boolean = false;
@@ -16,19 +17,19 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     handledChannels: number;
     hardwareVersion: number;
     hardwareChannels: number;
+    oled: Oled;
     private processSeekerInterval: NodeJS.Timeout;
     private deviceTimeout: NodeJS.Timeout;
     private hardAdjustInterval: NodeJS.Timeout;
-    private oledActiveTimeout: NodeJS.Timeout;
     private buttonsPressed = 0;
 
     constructor(options: MixerOptions) {
         super();
 
-        const { serialPort, baudRate, channelConfig, initializationTimeout } = options;
+        const { serialPort, baudRate, config, initializationTimeout } = options;
 
         this.isInitialized = false;
-        this.channels = channelConfig;
+        this.channels = config.channels;
 
         this.deviceTimeout = setTimeout(() => { 
             if (!this.isInitialized) {
@@ -42,6 +43,8 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         }, 1000);
         
         this.serial = new SerialHandler(serialPort, baudRate);
+
+        this.oled = new Oled(this.serial);
 
         this.serial.once('connect', () => {
             this.emit('connect');
@@ -71,36 +74,30 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 }
 
                 const reversedPolarityChannels: number[] = [];
-                const logharitmicChannels: number[] = [];
 
                 for (let i = 0; i < this.handledChannels; i++) {
                     const channel = this.channels[i];
 
                     if (channel.polarityReversed) reversedPolarityChannels.push(i);
-                    if (channel.logharitmic) logharitmicChannels.push(i);
 
                     if ((channel.type === 'render' && !channel.processes) || channel.type === 'capture') {
-                        const dev = this.getDevice(channel.device, channel.type);
+                        const dev = this.getAudioDevice(channel.device, channel.type);
                         this.channelsMuted[i] = dev.mute;
 
                         dev.on('mute', (muted: boolean) => {
                             this.channelsMuted[i] = muted;
-                            this.serial.sendCommand('l', ...this.channelsMuted.map(v => v ? 255 : 0));
+                            this.serial.sendCommand(SerialCommandOutgoingOpcodes.leds, ...SerialCommand.ledsSet(...this.channelsMuted));
                         });
                     }
                 }
 
                 if (reversedPolarityChannels.length) {
-                    this.serial.sendCommand('c', 0, ...reversedPolarityChannels);
+                    this.serial.sendCommand(SerialCommandOutgoingOpcodes.config, ...SerialCommand.configReversedPolarityChannels(...reversedPolarityChannels));
                 }
 
-                if (logharitmicChannels.length) {
-                    this.serial.sendCommand('c', 1, ...logharitmicChannels);
-                }
+                this.serial.sendCommand(SerialCommandOutgoingOpcodes.leds, ...SerialCommand.ledsSet(...this.channelsMuted));
 
-                this.serial.sendCommand('l', ...this.channelsMuted.map(v => v ? 255 : 0));
-
-                this.serial.sendCommand('i');
+                this.serial.sendCommand(SerialCommandOutgoingOpcodes.init);
 
                 this.isInitialized = true;
                 clearTimeout(this.deviceTimeout);
@@ -112,8 +109,8 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                         const muting = !this.channelsMuted[i]
                         this.channelsMuted[i] = muting;
 
-                        const channel = channelConfig[i];
-                        const device = this.getDevice(channel.device, channel.type);
+                        const channel = this.channels[i];
+                        const device = this.getAudioDevice(channel.device, channel.type);
                         
                         if (channel.type === 'render' && channel.processes) { // processes
                             device.sessions.filter(this.getSessionFilter(i)).forEach(as => { as.mute = muting; });
@@ -123,14 +120,15 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
 
                         logger.debug(muting ? `Muted channel ${i}` : `Unmuted channel ${i}`);
 
-                        this.setOledActive();
-                        this.serial.sendCommand('o', 3, muting ? 0 : 1, i);
+                        if (this.oled) {
+                            this.oled.displayMute(i, !muting);
+                        }
                     }
                 }
 
                 this.buttonsPressed = buttons;
 
-                this.serial.sendCommand('l', ...this.channelsMuted.map(v => v ? 255 : 0));
+                this.serial.sendCommand(SerialCommandOutgoingOpcodes.leds, ...SerialCommand.ledsSet(...this.channelsMuted));
             } else if (command === '#') {
                 this.emit('message', ...commandData.map(d => Buffer.from(d, 'base64').toString()));
             } else {
@@ -156,8 +154,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 }
 
                 if (!isNaN(changedValue)) {
-                    this.setOledActive();
-                    this.serial.sendCommand('o', 0, Math.round(changedValue * 100));
+                    this.oled.displayVolume(Math.round(changedValue * 100));
                 }
             }
 
@@ -186,7 +183,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
             if (!force && channelValue === this.channelValues[i]) continue;
             
             const channel = this.channels[i];
-            const device = this.getDevice(channel.device, channel.type);
+            const device = this.getAudioDevice(channel.device, channel.type);
             if (channel.type === 'render' && channel.processes) { // processes
                 device.sessions.filter(this.getSessionFilter(i)).forEach(as => { as.volume = channelValue; });
             } else { // device master volume
@@ -196,16 +193,6 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         this.channelValues = channels;
     }
 
-    private setOledActive(): void {
-        if (this.oledActiveTimeout) {
-            clearTimeout(this.oledActiveTimeout);
-        }
-
-        this.oledActiveTimeout = setTimeout(() => {
-            this.serial.sendCommand('o', 1);
-        }, 2000);
-    }
-
     private getSessionFilter(channelNum: number): (s: AudioSession) => boolean {
         const channel = this.channels[channelNum];
         if (channel.type === 'render') {
@@ -213,7 +200,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         } else throw new Error('Channel type is not render');
     }
 
-    private getDevice(deviceName: string, type: ('render' | 'capture')): Device {
+    private getAudioDevice(deviceName: string, type: ('render' | 'capture')): Device {
         return nativeMixer.devices.find(d => d.name === deviceName) ?? nativeMixer.getDefaultDevice(type === 'render' ? DeviceType.RENDER : DeviceType.CAPTURE);
     }
 

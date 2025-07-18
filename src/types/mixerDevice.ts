@@ -1,9 +1,9 @@
-import { ChannelConfig } from './mixerConfig';
+import { MixerConfig } from './mixerConfig';
 
 export type MixerOptions = {
     serialPort: string;
     baudRate: number;
-    channelConfig: ChannelConfig[];
+    config: MixerConfig;
     initializationTimeout?: number;
 };
 

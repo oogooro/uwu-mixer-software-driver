@@ -1,8 +1,5 @@
 export interface ChannelHardwareConfig {
     polarityReversed?: boolean;
-    logharitmic?: boolean;
-    muteButton?: boolean;
-    ledIndicator?: boolean;
 };
 
 export interface ChannelRenderConfig extends ChannelHardwareConfig {
