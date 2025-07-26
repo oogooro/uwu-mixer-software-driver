@@ -176,6 +176,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
     adjustVolumeLevels(channels: number[], force = false): void {
         if (!this.isInitialized) return;
         logger.debug(`Setting volume: ${channels.join(' ')}`);
+        const t = performance.now();
 
         for (let i = 0; i < this.handledChannels; i++) {
             const channelValue = channels[i];
@@ -191,6 +192,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
             }
         }
         this.channelValues = channels;
+        logger.debug(`Volume ajust took ${performance.now() - t}ms`);
     }
 
     private getSessionFilter(channelNum: number): (s: AudioSession) => boolean {
