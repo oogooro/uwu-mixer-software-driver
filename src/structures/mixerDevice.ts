@@ -97,6 +97,10 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
 
                 this.serial.sendCommand(SerialCommandOutgoingOpcodes.leds, ...SerialCommand.ledsSet(...this.channelsMuted));
 
+                console.log(SerialCommand.ledsBrightness(config.ledBrightness))
+
+                this.serial.sendCommand(SerialCommandOutgoingOpcodes.leds, ...SerialCommand.ledsBrightness(config.ledBrightness));
+
                 this.serial.sendCommand(SerialCommandOutgoingOpcodes.init);
 
                 this.isInitialized = true;

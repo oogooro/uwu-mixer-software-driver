@@ -26,4 +26,5 @@ export const defaultConfig = {
             polarityReversed: false,
         },
     ],
+    ledBrightness: 255,
 } satisfies MixerConfig;

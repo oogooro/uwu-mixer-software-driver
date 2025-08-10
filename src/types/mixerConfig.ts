@@ -17,4 +17,6 @@ export type ChannelConfig = ChannelRenderConfig | ChannelCaptureConfig
 
 export interface MixerConfig {
     channels: ChannelConfig[];
+    // Brightness in 0-255;
+    ledBrightness: number;
 };
