@@ -196,7 +196,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
             }
         }
         this.channelValues = channels;
-        logger.debug(`Volume ajust took ${performance.now() - t}ms`);
+        logger.debug(`Volume adjust took ${performance.now() - t}ms`);
     }
 
     private getSessionFilter(channelNum: number): (s: AudioSession) => boolean {
