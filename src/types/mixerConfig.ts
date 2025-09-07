@@ -1,19 +1,12 @@
-export interface ChannelHardwareConfig {
+export interface ChannelConfig {
     polarityReversed?: boolean;
-};
-
-export interface ChannelRenderConfig extends ChannelHardwareConfig {
-    type: 'render';
     processes?: string[];
     device?: string;
+    type: ChannelType;
 };
 
-export interface ChannelCaptureConfig extends ChannelHardwareConfig {
-    type: 'capture';
-    device?: string;
-};
-
-export type ChannelConfig = ChannelRenderConfig | ChannelCaptureConfig
+export type ChannelType = 'render' | 'capture';
+export type ChannelBindType = 'device' | 'process';
 
 export interface MixerConfig {
     channels: ChannelConfig[];

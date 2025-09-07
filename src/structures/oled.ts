@@ -2,7 +2,7 @@ import { SerialCommand, SerialHandler } from './serialHandler';
 
 export class Oled {
     private serial: SerialHandler;
-    private displayActiveTimeout: NodeJS.Timeout;
+    private displayActiveTimeout?: NodeJS.Timeout;
     displayActiveTime: number;
 
     constructor(serial: SerialHandler, displayActiveTime = 2000) {
