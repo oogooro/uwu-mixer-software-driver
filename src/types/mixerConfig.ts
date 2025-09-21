@@ -1,4 +1,5 @@
 export interface ChannelConfig {
+    name?: string;
     polarityReversed?: boolean;
     processes?: string[];
     device?: string;

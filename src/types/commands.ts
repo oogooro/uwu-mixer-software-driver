@@ -3,6 +3,7 @@ export type IncomingCommand =
     '=' | // channel values
     'b' | // buttons
     '#';  // mixer debug
+
 export type OutgoingCommand = 
     'i' | // initalize mixer
     'l' | // set leds

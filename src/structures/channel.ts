@@ -4,6 +4,7 @@ import logger from '../logger';
 
 export class Channel {
     private volume = 0;
+    name: string;
     device: Device;
     config: ChannelConfig;
     type: ChannelType;
@@ -13,6 +14,7 @@ export class Channel {
         this.config = config;
         this.polarityReversed = !!config.polarityReversed;
         this.type = config.type;
+        this.name = config.name || 'channel';
 
         if (config.type === 'render' && config.processes?.length) {
             this.bind = 'process';

@@ -73,6 +73,7 @@ export const SerialCommandArgs = {
         clear: 1,
         brightness: 2,
         mute: 3,
+        registerChannelNames: 4,
     },
     leds: {
         set: 0,
@@ -92,8 +93,8 @@ export const SerialCommandOutgoingOpcodes: ISerialCommandOutgoingOpcodes = {
 };
 
 export const SerialCommand = {
-    oledVolume: (volume: number): (string | number)[] => {
-        return [SerialCommandArgs.oled.volume, volume];
+    oledVolume: (volume: number, channel: number): (string | number)[] => {
+        return [SerialCommandArgs.oled.volume, volume, channel];
     },
     oledClear: (): (string | number)[] => {
         return [SerialCommandArgs.oled.clear];
@@ -103,6 +104,9 @@ export const SerialCommand = {
     },
     oledMute: (channel: number, unmute: boolean): (string | number)[] => {
         return [SerialCommandArgs.oled.mute, unmute ? 1 : 0, channel];
+    },
+    oledRegisterChannelNames: (names: string[]): (string | number)[] => {
+        return [SerialCommandArgs.oled.registerChannelNames, ...names];
     },
     ledsSet: (...leds: boolean[]): (string | number)[] => {
         return [SerialCommandArgs.leds.set, ...leds.map(b => b ? 1 : 0)];

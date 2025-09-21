@@ -22,9 +22,9 @@ export class Oled {
         this.serial.sendCommand('o', ...SerialCommand.oledClear());
     }
 
-    displayVolume(volume: number): void {
+    displayVolume(volume: number, channel: number): void {
         this.setDisplayActive();
-        this.serial.sendCommand('o', ...SerialCommand.oledVolume(volume));
+        this.serial.sendCommand('o', ...SerialCommand.oledVolume(volume, channel));
     }
 
     displayMute(channel: number, unmute: boolean): void {

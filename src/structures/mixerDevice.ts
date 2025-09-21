@@ -28,7 +28,7 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         const { serialPort, baudRate, config, initializationTimeout } = options;
 
         this.isInitialized = false;
-        this.channels = config.channels.map(c => new Channel(c));
+        this.channels = config.channels.map((c, i) => new Channel({ ...{ name: `Channel ${i + 1}`, }, ...c, }));
 
         this.deviceTimeout = setTimeout(() => { 
             if (!this.isInitialized) {
@@ -97,6 +97,8 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
                 
                 this.serial.sendCommand(SerialCommandOutgoingOpcodes.leds, ...SerialCommand.ledsSet(...this.channelsMuted));
 
+                this.serial.sendCommand(SerialCommandOutgoingOpcodes.oled, ...SerialCommand.oledRegisterChannelNames(this.channels.map(c => c.name)));
+
                 this.serial.sendCommand(SerialCommandOutgoingOpcodes.init);
 
                 this.isInitialized = true;
@@ -137,16 +139,18 @@ export class MixerDevice extends EventEmitter<MixerEvents> {
         this.serial.on('potsValues', (...chValues) => {
             if (this.channelValues.length) {
                 let changedValue: number = NaN;
+                let changedChannelIndex: number;
                 
-                for (let i = 0; i < this.handledChannels; i++) {
-                    if (chValues[i] !== this.channelValues[i]) {
-                        changedValue = chValues[i];
+                for (let channelIndex = 0; channelIndex < this.handledChannels; channelIndex++) {
+                    if (chValues[channelIndex] !== this.channelValues[channelIndex]) {
+                        changedValue = chValues[channelIndex];
+                        changedChannelIndex = channelIndex;
                         break;
                     }
                 }
 
                 if (!isNaN(changedValue)) {
-                    this.oled.displayVolume(Math.round(changedValue));
+                    this.oled.displayVolume(Math.round(changedValue), changedChannelIndex!);
                 }
             }
 
